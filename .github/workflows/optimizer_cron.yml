@@ -1,1 +1,34 @@
+name: Daily AI Optimizer
 
+on:
+  schedule:
+    # 11:00 UTC time corresponds to 16:30 IST (Indian Standard Time)
+    - cron: '0 11 * * *'
+  workflow_dispatch: # Ye aapko manually GitHub dashboard se button daba kar run karne deta hai
+
+jobs:
+  run-optimizer:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.12'
+          
+      - name: Install Dependencies
+        run: pip install -r requirements.txt
+          
+      - name: Run Optimizer Script
+        run: python optimizer.py
+          
+      - name: Commit and Push Updated JSON
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add optimized_params.json
+          git commit -m "Auto-update optimized EMA parameters" || echo "No changes to commit"
+          git push
