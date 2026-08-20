@@ -1,236 +1,335 @@
 import pandas as pd
 import numpy as np
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
+from datetime import timedelta
 
-def create_line_break_with_emas(df, line_break_df, fast_ema=21, slow_ema=44):
+def convert_to_3_line_break_with_time(df):
     """
-    Line Break chart with EMAs plotted on it
+    3-Line Break chart with proper time tracking
     """
-    if df is None or line_break_df is None:
-        return None
+    if df is None or df.empty:
+        return df
     
-    # ========== 1. LINE BREAK CHART BANAYEIN ==========
-    # Line break blocks ka OHLC data
-    lb_ohlc = line_break_df.copy()
+    close_col = 'Close' if 'Close' in df.columns else 'close' if 'close' in df.columns else None
+    high_col = 'High' if 'High' in df.columns else 'high' if 'high' in df.columns else None
+    low_col = 'Low' if 'Low' in df.columns else 'low' if 'low' in df.columns else None
     
-    # ========== 2. EMAs CALCULATE KAREIN (Sahi tareeke se) ==========
-    # Method 1: Original data pe EMAs calculate karein, phir line break points pe map karein
+    if not close_col:
+        return df
+    
+    df = df.copy()
+    df[close_col] = pd.to_numeric(df[close_col], errors='coerce')
+    
+    blocks = []
+    block_start_time = df.index[0]
+    block_end_time = df.index[0]
+    
+    # FIRST BLOCK
+    first_price = df[close_col].iloc[0]
+    start_idx = 1
+    
+    for i in range(1, len(df)):
+        if not pd.isna(df[close_col].iloc[i]) and df[close_col].iloc[i] != first_price:
+            current_price = df[close_col].iloc[i]
+            
+            if current_price > first_price:
+                blocks.append({
+                    'open': first_price,
+                    'high': df[high_col].iloc[:i+1].max() if high_col else current_price,
+                    'low': df[low_col].iloc[:i+1].min() if low_col else first_price,
+                    'close': current_price,
+                    'trend': 1,
+                    'start_time': df.index[0],
+                    'end_time': df.index[i],
+                    'duration': df.index[i] - df.index[0]
+                })
+            else:
+                blocks.append({
+                    'open': first_price,
+                    'high': df[high_col].iloc[:i+1].max() if high_col else first_price,
+                    'low': df[low_col].iloc[:i+1].min() if low_col else current_price,
+                    'close': current_price,
+                    'trend': -1,
+                    'start_time': df.index[0],
+                    'end_time': df.index[i],
+                    'duration': df.index[i] - df.index[0]
+                })
+            start_idx = i + 1
+            break
+    
+    if not blocks:
+        return df
+    
+    # MAIN 3-LINE BREAK LOGIC
+    for i in range(start_idx, len(df)):
+        current_close = df[close_col].iloc[i]
+        current_high = df[high_col].iloc[i] if high_col else current_close
+        current_low = df[low_col].iloc[i] if low_col else current_close
+        current_time = df.index[i]
+        
+        if pd.isna(current_close):
+            continue
+        
+        last_block = blocks[-1]
+        last_3_blocks = blocks[-3:] if len(blocks) >= 3 else blocks
+        
+        if last_block['trend'] == 1:
+            if current_high > last_block['high']:
+                # Continuation UP
+                blocks.append({
+                    'open': last_block['close'],
+                    'high': current_high,
+                    'low': last_block['low'],
+                    'close': current_close,
+                    'trend': 1,
+                    'start_time': last_block['end_time'],
+                    'end_time': current_time,
+                    'duration': current_time - last_block['end_time']
+                })
+            else:
+                reversal_price = min([block['low'] for block in last_3_blocks])
+                if current_low < reversal_price:
+                    # Reversal DOWN
+                    blocks.append({
+                        'open': last_block['close'],
+                        'high': last_block['high'],
+                        'low': current_low,
+                        'close': current_close,
+                        'trend': -1,
+                        'start_time': last_block['end_time'],
+                        'end_time': current_time,
+                        'duration': current_time - last_block['end_time']
+                    })
+                else:
+                    # Extend current block
+                    blocks[-1]['high'] = max(blocks[-1]['high'], current_high)
+                    blocks[-1]['low'] = min(blocks[-1]['low'], current_low)
+                    blocks[-1]['close'] = current_close
+                    blocks[-1]['end_time'] = current_time
+                    blocks[-1]['duration'] = current_time - blocks[-1]['start_time']
+                    
+        elif last_block['trend'] == -1:
+            if current_low < last_block['low']:
+                # Continuation DOWN
+                blocks.append({
+                    'open': last_block['close'],
+                    'high': last_block['high'],
+                    'low': current_low,
+                    'close': current_close,
+                    'trend': -1,
+                    'start_time': last_block['end_time'],
+                    'end_time': current_time,
+                    'duration': current_time - last_block['end_time']
+                })
+            else:
+                reversal_price = max([block['high'] for block in last_3_blocks])
+                if current_high > reversal_price:
+                    # Reversal UP
+                    blocks.append({
+                        'open': last_block['close'],
+                        'high': current_high,
+                        'low': last_block['low'],
+                        'close': current_close,
+                        'trend': 1,
+                        'start_time': last_block['end_time'],
+                        'end_time': current_time,
+                        'duration': current_time - last_block['end_time']
+                    })
+                else:
+                    # Extend current block
+                    blocks[-1]['high'] = max(blocks[-1]['high'], current_high)
+                    blocks[-1]['low'] = min(blocks[-1]['low'], current_low)
+                    blocks[-1]['close'] = current_close
+                    blocks[-1]['end_time'] = current_time
+                    blocks[-1]['duration'] = current_time - blocks[-1]['start_time']
+    
+    # Create DataFrame with proper time tracking
+    lb_data = []
+    for block in blocks:
+        lb_data.append({
+            'Open': block['open'],
+            'High': block['high'],
+            'Low': block['low'],
+            'Close': block['close'],
+            'Trend': block['trend'],
+            'Start_Time': block['start_time'],
+            'End_Time': block['end_time'],
+            'Duration': block['duration']
+        })
+    
+    lb_df = pd.DataFrame(lb_data)
+    lb_df.set_index('End_Time', inplace=True)
+    
+    return lb_df
+
+
+def calculate_emas_on_original_data(df, fast_ema=21, slow_ema=44):
+    """
+    Original data pe EMAs calculate karein
+    """
     close_col = 'Close' if 'Close' in df.columns else 'close' if 'close' in df.columns else None
     if not close_col:
         return None
     
-    # Original data pe EMAs
+    df = df.copy()
+    
+    # EMAs on original data (hourly/daily)
     df['EMA_Fast'] = df[close_col].ewm(span=fast_ema, adjust=False).mean()
     df['EMA_Slow'] = df[close_col].ewm(span=slow_ema, adjust=False).mean()
     
-    # ========== 3. EMAs ko Line Break points pe map karein ==========
+    return df
+
+
+def map_emas_to_line_break(lb_df, df_with_emas):
+    """
+    EMAs ko line break chart pe map karein (exact time matching)
+    """
+    if lb_df is None or df_with_emas is None:
+        return None
+    
+    lb_df = lb_df.copy()
+    
+    # Create DateTimeIndex for faster lookup
+    ema_df = df_with_emas[['EMA_Fast', 'EMA_Slow']].copy()
+    
+    # For each line break block, find the EMA value at its end time
     ema_fast_values = []
     ema_slow_values = []
-    lb_dates = []
     
-    for idx, row in line_break_df.iterrows():
-        # Us line break block ke corresponding original data points
-        if idx in df.index:
-            # Direct match
-            ema_fast_values.append(df.loc[idx, 'EMA_Fast'])
-            ema_slow_values.append(df.loc[idx, 'EMA_Slow'])
-            lb_dates.append(idx)
+    for idx in lb_df.index:
+        # Try exact match first
+        if idx in ema_df.index:
+            ema_fast_values.append(ema_df.loc[idx, 'EMA_Fast'])
+            ema_slow_values.append(ema_df.loc[idx, 'EMA_Slow'])
         else:
-            # Find nearest valid date in original data
-            # Line break date se pehle ka last valid EMA value
+            # Find the nearest time in original data (before or at block end)
+            # This is the KEY FIX - use asof for nearest value
             try:
-                prev_data = df[df.index <= idx]
-                if not prev_data.empty:
-                    ema_fast_values.append(prev_data.iloc[-1]['EMA_Fast'])
-                    ema_slow_values.append(prev_data.iloc[-1]['EMA_Slow'])
-                    lb_dates.append(idx)
+                # Get the closest index that is <= block end time
+                closest_idx = ema_df.index.asof(idx)
+                if pd.notna(closest_idx):
+                    ema_fast_values.append(ema_df.loc[closest_idx, 'EMA_Fast'])
+                    ema_slow_values.append(ema_df.loc[closest_idx, 'EMA_Slow'])
                 else:
-                    # Agar koi match nahi milta toh forward fill
-                    next_data = df[df.index >= idx]
-                    if not next_data.empty:
-                        ema_fast_values.append(next_data.iloc[0]['EMA_Fast'])
-                        ema_slow_values.append(next_data.iloc[0]['EMA_Slow'])
-                        lb_dates.append(idx)
-                    else:
-                        ema_fast_values.append(np.nan)
-                        ema_slow_values.append(np.nan)
-                        lb_dates.append(idx)
+                    ema_fast_values.append(np.nan)
+                    ema_slow_values.append(np.nan)
             except:
                 ema_fast_values.append(np.nan)
                 ema_slow_values.append(np.nan)
-                lb_dates.append(idx)
     
-    # Line break DataFrame mein EMAs add karein
-    line_break_df['EMA_Fast'] = ema_fast_values
-    line_break_df['EMA_Slow'] = ema_slow_values
+    lb_df['EMA_Fast'] = ema_fast_values
+    lb_df['EMA_Slow'] = ema_slow_values
     
-    # ========== 4. CROSSOVER SIGNALS GENERATE KAREIN ==========
-    line_break_df['Crossover'] = 0
+    # Forward fill any NaN values
+    lb_df['EMA_Fast'] = lb_df['EMA_Fast'].fillna(method='ffill')
+    lb_df['EMA_Slow'] = lb_df['EMA_Slow'].fillna(method='ffill')
     
-    # Bullish Crossover: Fast EMA crosses above Slow EMA
-    for i in range(1, len(line_break_df)):
-        if (line_break_df.iloc[i-1]['EMA_Fast'] <= line_break_df.iloc[i-1]['EMA_Slow'] and 
-            line_break_df.iloc[i]['EMA_Fast'] > line_break_df.iloc[i]['EMA_Slow']):
-            line_break_df.loc[line_break_df.index[i], 'Crossover'] = 1  # Bullish
-            
-        # Bearish Crossover: Fast EMA crosses below Slow EMA
-        elif (line_break_df.iloc[i-1]['EMA_Fast'] >= line_break_df.iloc[i-1]['EMA_Slow'] and 
-              line_break_df.iloc[i]['EMA_Fast'] < line_break_df.iloc[i]['EMA_Slow']):
-            line_break_df.loc[line_break_df.index[i], 'Crossover'] = -1  # Bearish
-    
-    return line_break_df
+    return lb_df
 
 
-def visualize_line_break_with_emas(line_break_df, title="3-Line Break Chart with EMAs"):
+def generate_crossover_signals(lb_df):
     """
-    Line Break chart ko EMAs ke saath visualize karein
+    Crossover signals generate karein
     """
-    if line_break_df is None or line_break_df.empty:
-        return
+    if lb_df is None or lb_df.empty:
+        return lb_df
     
-    # Candlestick chart banayein
-    fig = go.Figure(data=[
-        go.Candlestick(
-            x=line_break_df.index,
-            open=line_break_df['Open'],
-            high=line_break_df['High'],
-            low=line_break_df['Low'],
-            close=line_break_df['Close'],
-            name='Line Break'
-        ),
-        # Fast EMA
-        go.Scatter(
-            x=line_break_df.index,
-            y=line_break_df['EMA_Fast'],
-            name=f'EMA {fast_ema}',
-            line=dict(color='blue', width=2)
-        ),
-        # Slow EMA
-        go.Scatter(
-            x=line_break_df.index,
-            y=line_break_df['EMA_Slow'],
-            name=f'EMA {slow_ema}',
-            line=dict(color='red', width=2)
-        )
-    ])
+    lb_df = lb_df.copy()
     
-    # Crossover signals add karein
-    bullish_signals = line_break_df[line_break_df['Crossover'] == 1]
-    bearish_signals = line_break_df[line_break_df['Crossover'] == -1]
+    # Calculate crossover signals
+    lb_df['Crossover'] = 0
     
-    # Bullish signals (green triangles pointing up)
-    fig.add_trace(go.Scatter(
-        x=bullish_signals.index,
-        y=bullish_signals['Low'] * 0.99,  # Slightly below the candle
-        mode='markers',
-        marker=dict(symbol='triangle-up', size=15, color='green'),
-        name='Bullish Crossover'
-    ))
+    for i in range(1, len(lb_df)):
+        # Bullish crossover: Fast EMA crosses above Slow EMA
+        if (lb_df.iloc[i-1]['EMA_Fast'] <= lb_df.iloc[i-1]['EMA_Slow'] and 
+            lb_df.iloc[i]['EMA_Fast'] > lb_df.iloc[i]['EMA_Slow']):
+            lb_df.iloc[i, lb_df.columns.get_loc('Crossover')] = 1
+        
+        # Bearish crossover: Fast EMA crosses below Slow EMA
+        elif (lb_df.iloc[i-1]['EMA_Fast'] >= lb_df.iloc[i-1]['EMA_Slow'] and 
+              lb_df.iloc[i]['EMA_Fast'] < lb_df.iloc[i]['EMA_Slow']):
+            lb_df.iloc[i, lb_df.columns.get_loc('Crossover')] = -1
     
-    # Bearish signals (red triangles pointing down)
-    fig.add_trace(go.Scatter(
-        x=bearish_signals.index,
-        y=bearish_signals['High'] * 1.01,  # Slightly above the candle
-        mode='markers',
-        marker=dict(symbol='triangle-down', size=15, color='red'),
-        name='Bearish Crossover'
-    ))
-    
-    fig.update_layout(
-        title=title,
-        xaxis_title='Date/Time',
-        yaxis_title='Price',
-        template='plotly_dark',
-        height=600
-    )
-    
-    fig.show()
+    return lb_df
 
 
-def get_accurate_signals(line_break_df, max_signals=7):
+def get_signals_with_context(lb_df, max_signals=7):
     """
-    Accurate signals extract karein
+    Context ke saath signals extract karein
     """
     signals = []
     
-    # Sirf crossover points
-    crossovers = line_break_df[line_break_df['Crossover'] != 0]
+    crossovers = lb_df[lb_df['Crossover'] != 0]
     
-    for idx, row in crossovers.iterrows():
+    for idx, row in crossovers.tail(max_signals).iterrows():
         if row['Crossover'] == 1:
-            sig_type = "Bullish Crossover 🟢"
+            sig_type = "BUY - Bullish Crossover 🟢"
+            ema_diff = row['EMA_Fast'] - row['EMA_Slow']
         else:
-            sig_type = "Bearish Crossover 🔴"
+            sig_type = "SELL - Bearish Crossover 🔴"
+            ema_diff = row['EMA_Fast'] - row['EMA_Slow']
         
         signals.append({
             "signal": sig_type,
-            "close": row['Close'],
-            "time": str(idx),
-            "fast_ema": row['EMA_Fast'],
-            "slow_ema": row['EMA_Slow']
+            "price": row['Close'],
+            "time": idx,
+            "fast_ema": round(row['EMA_Fast'], 2),
+            "slow_ema": round(row['EMA_Slow'], 2),
+            "ema_diff": round(ema_diff, 2),
+            "trend": "UP" if row['Trend'] == 1 else "DOWN"
         })
     
-    return signals[-max_signals:][::-1]  # Latest signals first
+    return signals[::-1]  # Oldest to newest
 
 
-# ========== COMPLETE USAGE EXAMPLE ==========
+# ========== COMPLETE USAGE ==========
 
-# Step 1: Load original data
+def complete_strategy(df, fast_ema=21, slow_ema=44):
+    """
+    Complete strategy execution
+    """
+    print("📊 Step 1: Creating 3-Line Break Chart...")
+    lb_df = convert_to_3_line_break_with_time(df)
+    print(f"✅ Line Break Blocks: {len(lb_df)}")
+    
+    print("\n📊 Step 2: Calculating EMAs on original data...")
+    df_with_emas = calculate_emas_on_original_data(df, fast_ema, slow_ema)
+    print(f"✅ EMAs calculated on {len(df_with_emas)} data points")
+    
+    print("\n📊 Step 3: Mapping EMAs to Line Break chart...")
+    lb_df_with_emas = map_emas_to_line_break(lb_df, df_with_emas)
+    print(f"✅ EMAs mapped to {len(lb_df_with_emas)} line break blocks")
+    
+    print("\n📊 Step 4: Generating crossover signals...")
+    lb_df_with_signals = generate_crossover_signals(lb_df_with_emas)
+    
+    print("\n📊 Step 5: Extracting signals...")
+    signals = get_signals_with_context(lb_df_with_signals)
+    
+    return lb_df_with_signals, signals
+
+
+# ========== EXECUTION ==========
+
+# Load your data
 df = pd.read_csv('your_data.csv', index_col='Date', parse_dates=True)
-# Ensure columns: ['Open', 'High', 'Low', 'Close']
 
-# Step 2: Convert to 3-line break
-line_break_df = convert_to_3_line_break(df)  # Your existing function
+# Run the complete strategy
+lb_df_final, signals = complete_strategy(df, fast_ema=21, slow_ema=44)
 
-# Step 3: Line Break chart pe EMAs plot karein
-result_df = create_line_break_with_emas(df, line_break_df, fast_ema=21, slow_ema=44)
+# Print signals
+print("\n" + "="*60)
+print("📈 LATEST SIGNALS")
+print("="*60)
 
-# Step 4: Visualize
-visualize_line_break_with_emas(result_df)
-
-# Step 5: Extract signals
-signals = get_accurate_signals(result_df, max_signals=7)
-
-# Print signals with details
-print("\n=== LATEST SIGNALS ===")
 for sig in signals:
-    print(f"Time: {sig['time']}")
-    print(f"Signal: {sig['signal']}")
-    print(f"Price: {sig['close']:.2f}")
-    print(f"Fast EMA: {sig['fast_ema']:.2f}, Slow EMA: {sig['slow_ema']:.2f}")
-    print("-" * 40)
+    print(f"\n⏰ Time: {sig['time']}")
+    print(f"📊 Signal: {sig['signal']}")
+    print(f"💰 Price: {sig['price']:.2f}")
+    print(f"📈 Fast EMA: {sig['fast_ema']}, Slow EMA: {sig['slow_ema']}")
+    print(f"📉 EMA Difference: {sig['ema_diff']}")
+    print(f"📊 Line Break Trend: {sig['trend']}")
+    print("-"*40)
 
-
-# ========== ALTERNATIVE METHOD: Resample to Regular Intervals ==========
-
-def create_resampled_line_break_with_emas(df, interval='1min'):
-    """
-    Regular interval pe line break + EMAs
-    """
-    # Pehle line break banayein
-    line_break_df = convert_to_3_line_break(df)
-    
-    # Regular interval pe resample karein
-    resampled_lb = line_break_df.resample(interval).agg({
-        'Open': 'first',
-        'High': 'max',
-        'Low': 'min',
-        'Close': 'last'
-    }).dropna()
-    
-    # Ab EMAs calculate karein is regular data pe
-    resampled_lb['EMA_Fast'] = resampled_lb['Close'].ewm(span=21, adjust=False).mean()
-    resampled_lb['EMA_Slow'] = resampled_lb['Close'].ewm(span=44, adjust=False).mean()
-    
-    # Crossover signals
-    resampled_lb['Crossover'] = 0
-    for i in range(1, len(resampled_lb)):
-        if (resampled_lb.iloc[i-1]['EMA_Fast'] <= resampled_lb.iloc[i-1]['EMA_Slow'] and 
-            resampled_lb.iloc[i]['EMA_Fast'] > resampled_lb.iloc[i]['EMA_Slow']):
-            resampled_lb.iloc[i, resampled_lb.columns.get_loc('Crossover')] = 1
-        elif (resampled_lb.iloc[i-1]['EMA_Fast'] >= resampled_lb.iloc[i-1]['EMA_Slow'] and 
-              resampled_lb.iloc[i]['EMA_Fast'] < resampled_lb.iloc[i]['EMA_Slow']):
-            resampled_lb.iloc[i, resampled_lb.columns.get_loc('Crossover')] = -1
-    
-    return resampled_lb
+# Optional: Save to CSV for analysis
+lb_df_final.to_csv('line_break_with_emas.csv')
+print("\n✅ Data saved to 'line_break_with_emas.csv'")
