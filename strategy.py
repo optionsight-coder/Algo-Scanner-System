@@ -1,132 +1,236 @@
 import pandas as pd
-import pandas_ta as ta
 import numpy as np
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 
-def convert_to_3_line_break(df):
-    if df is None or df.empty: return df
+def create_line_break_with_emas(df, line_break_df, fast_ema=21, slow_ema=44):
+    """
+    Line Break chart with EMAs plotted on it
+    """
+    if df is None or line_break_df is None:
+        return None
+    
+    # ========== 1. LINE BREAK CHART BANAYEIN ==========
+    # Line break blocks ka OHLC data
+    lb_ohlc = line_break_df.copy()
+    
+    # ========== 2. EMAs CALCULATE KAREIN (Sahi tareeke se) ==========
+    # Method 1: Original data pe EMAs calculate karein, phir line break points pe map karein
     close_col = 'Close' if 'Close' in df.columns else 'close' if 'close' in df.columns else None
-    if not close_col: return df
-        
-    df = df.copy()
-    df[close_col] = pd.to_numeric(df[close_col], errors='coerce')
+    if not close_col:
+        return None
     
-    blocks = []
-    first_price = df[close_col].iloc[0]
-    start_idx = 1
+    # Original data pe EMAs
+    df['EMA_Fast'] = df[close_col].ewm(span=fast_ema, adjust=False).mean()
+    df['EMA_Slow'] = df[close_col].ewm(span=slow_ema, adjust=False).mean()
     
-    # 1. Pehla block banana
-    for i in range(1, len(df)):
-        if not pd.isna(df[close_col].iloc[i]) and df[close_col].iloc[i] != first_price:
-            current_price = df[close_col].iloc[i]
-            if current_price > first_price:
-                blocks.append({'high': current_price, 'low': first_price, 'close': current_price, 'trend': 1, 'date': df.index[i]})
-            else:
-                blocks.append({'high': first_price, 'low': current_price, 'close': current_price, 'trend': -1, 'date': df.index[i]})
-            start_idx = i + 1
-            break
-
-    if not blocks:
-        return df
-
-    # 2. Main 3-Line Break Logic (With TradingView High/Low & Error Fixes)
-    for i in range(start_idx, len(df)):
-        current_price = df[close_col].iloc[i]
-        date = df.index[i]
-        if pd.isna(current_price): continue
-        
-        last_block = blocks[-1]
-        
-        if last_block['trend'] == 1: # Trend UP hai
-            if current_price > last_block['high']:
-                # Continuation UP
-                blocks.append({'high': current_price, 'low': last_block['high'], 'close': current_price, 'trend': 1, 'date': date})
-            else:
-                # Reversal Check DOWN (Pichle max 3 blocks ka lowest Low)
-                up_blocks = [b for b in blocks if b['trend'] == 1]
-                if not up_blocks:
-                    reversal_price = last_block['low']
+    # ========== 3. EMAs ko Line Break points pe map karein ==========
+    ema_fast_values = []
+    ema_slow_values = []
+    lb_dates = []
+    
+    for idx, row in line_break_df.iterrows():
+        # Us line break block ke corresponding original data points
+        if idx in df.index:
+            # Direct match
+            ema_fast_values.append(df.loc[idx, 'EMA_Fast'])
+            ema_slow_values.append(df.loc[idx, 'EMA_Slow'])
+            lb_dates.append(idx)
+        else:
+            # Find nearest valid date in original data
+            # Line break date se pehle ka last valid EMA value
+            try:
+                prev_data = df[df.index <= idx]
+                if not prev_data.empty:
+                    ema_fast_values.append(prev_data.iloc[-1]['EMA_Fast'])
+                    ema_slow_values.append(prev_data.iloc[-1]['EMA_Slow'])
+                    lb_dates.append(idx)
                 else:
-                    last_3_up = up_blocks[-3:]
-                    reversal_price = min([b['low'] for b in last_3_up])
-                
-                if current_price < reversal_price:
-                    # Reversal DOWN
-                    blocks.append({'high': last_block['high'], 'low': current_price, 'close': current_price, 'trend': -1, 'date': date})
-                    
-        elif last_block['trend'] == -1: # Trend DOWN hai
-            if current_price < last_block['low']:
-                # Continuation DOWN
-                blocks.append({'high': last_block['low'], 'low': current_price, 'close': current_price, 'trend': -1, 'date': date})
-            else:
-                # Reversal Check UP (Pichle max 3 blocks ka highest High)
-                down_blocks = [b for b in blocks if b['trend'] == -1]
-                if not down_blocks:
-                    reversal_price = last_block['high']
-                else:
-                    last_3_down = down_blocks[-3:]
-                    reversal_price = max([b['high'] for b in last_3_down])
-                
-                if current_price > reversal_price:
-                    # Reversal UP
-                    blocks.append({'high': current_price, 'low': last_block['low'], 'close': current_price, 'trend': 1, 'date': date})
-
-    # 3. Blocks se wapas dataframe banana jise EMA padh sake
-    lb_closes = [b['close'] for b in blocks]
-    lb_dates = [b['date'] for b in blocks]
-    lb_df = pd.DataFrame({close_col: lb_closes}, index=lb_dates)
+                    # Agar koi match nahi milta toh forward fill
+                    next_data = df[df.index >= idx]
+                    if not next_data.empty:
+                        ema_fast_values.append(next_data.iloc[0]['EMA_Fast'])
+                        ema_slow_values.append(next_data.iloc[0]['EMA_Slow'])
+                        lb_dates.append(idx)
+                    else:
+                        ema_fast_values.append(np.nan)
+                        ema_slow_values.append(np.nan)
+                        lb_dates.append(idx)
+            except:
+                ema_fast_values.append(np.nan)
+                ema_slow_values.append(np.nan)
+                lb_dates.append(idx)
     
-    return lb_df
+    # Line break DataFrame mein EMAs add karein
+    line_break_df['EMA_Fast'] = ema_fast_values
+    line_break_df['EMA_Slow'] = ema_slow_values
+    
+    # ========== 4. CROSSOVER SIGNALS GENERATE KAREIN ==========
+    line_break_df['Crossover'] = 0
+    
+    # Bullish Crossover: Fast EMA crosses above Slow EMA
+    for i in range(1, len(line_break_df)):
+        if (line_break_df.iloc[i-1]['EMA_Fast'] <= line_break_df.iloc[i-1]['EMA_Slow'] and 
+            line_break_df.iloc[i]['EMA_Fast'] > line_break_df.iloc[i]['EMA_Slow']):
+            line_break_df.loc[line_break_df.index[i], 'Crossover'] = 1  # Bullish
+            
+        # Bearish Crossover: Fast EMA crosses below Slow EMA
+        elif (line_break_df.iloc[i-1]['EMA_Fast'] >= line_break_df.iloc[i-1]['EMA_Slow'] and 
+              line_break_df.iloc[i]['EMA_Fast'] < line_break_df.iloc[i]['EMA_Slow']):
+            line_break_df.loc[line_break_df.index[i], 'Crossover'] = -1  # Bearish
+    
+    return line_break_df
 
-def calculate_indicators(df, fast_ema=21, slow_ema=44):
-    if df is not None and not df.empty:
-        target_col = 'Close' if 'Close' in df.columns else 'close' if 'close' in df.columns else df.columns[0]
-        df[target_col] = pd.to_numeric(df[target_col], errors='coerce')
-        
-        # EMA Calculations
-        df['EMA_Fast'] = ta.ema(df[target_col], length=fast_ema)
-        df['EMA_Slow'] = ta.ema(df[target_col], length=slow_ema)
-        
-        # Repainting Fix: Shift data by 1 and 2 to strictly use closed candles
-        df['EMA_Fast_t1'] = df['EMA_Fast'].shift(1)
-        df['EMA_Slow_t1'] = df['EMA_Slow'].shift(1)
-        
-        df['EMA_Fast_t2'] = df['EMA_Fast'].shift(2)
-        df['EMA_Slow_t2'] = df['EMA_Slow'].shift(2)
-        
-        df['Signal'] = 0
-        df['Trend'] = np.where(df['EMA_Fast'] > df['EMA_Slow'], 1, -1)
-        
-        # Buy/Sell Conditions
-        bullish_cond = (df['EMA_Fast_t2'] <= df['EMA_Slow_t2']) & (df['EMA_Fast_t1'] > df['EMA_Slow_t1'])
-        bearish_cond = (df['EMA_Fast_t2'] >= df['EMA_Slow_t2']) & (df['EMA_Fast_t1'] < df['EMA_Slow_t1'])
-        
-        df.loc[bullish_cond, 'Signal'] = 2
-        df.loc[bearish_cond, 'Signal'] = -2
-        
-        # Clean up columns
-        df.drop(columns=['EMA_Fast_t1', 'EMA_Slow_t1', 'EMA_Fast_t2', 'EMA_Slow_t2'], inplace=True, errors='ignore')
-        
-    return df
 
-def check_rules(df, max_signals=7):
+def visualize_line_break_with_emas(line_break_df, title="3-Line Break Chart with EMAs"):
+    """
+    Line Break chart ko EMAs ke saath visualize karein
+    """
+    if line_break_df is None or line_break_df.empty:
+        return
+    
+    # Candlestick chart banayein
+    fig = go.Figure(data=[
+        go.Candlestick(
+            x=line_break_df.index,
+            open=line_break_df['Open'],
+            high=line_break_df['High'],
+            low=line_break_df['Low'],
+            close=line_break_df['Close'],
+            name='Line Break'
+        ),
+        # Fast EMA
+        go.Scatter(
+            x=line_break_df.index,
+            y=line_break_df['EMA_Fast'],
+            name=f'EMA {fast_ema}',
+            line=dict(color='blue', width=2)
+        ),
+        # Slow EMA
+        go.Scatter(
+            x=line_break_df.index,
+            y=line_break_df['EMA_Slow'],
+            name=f'EMA {slow_ema}',
+            line=dict(color='red', width=2)
+        )
+    ])
+    
+    # Crossover signals add karein
+    bullish_signals = line_break_df[line_break_df['Crossover'] == 1]
+    bearish_signals = line_break_df[line_break_df['Crossover'] == -1]
+    
+    # Bullish signals (green triangles pointing up)
+    fig.add_trace(go.Scatter(
+        x=bullish_signals.index,
+        y=bullish_signals['Low'] * 0.99,  # Slightly below the candle
+        mode='markers',
+        marker=dict(symbol='triangle-up', size=15, color='green'),
+        name='Bullish Crossover'
+    ))
+    
+    # Bearish signals (red triangles pointing down)
+    fig.add_trace(go.Scatter(
+        x=bearish_signals.index,
+        y=bearish_signals['High'] * 1.01,  # Slightly above the candle
+        mode='markers',
+        marker=dict(symbol='triangle-down', size=15, color='red'),
+        name='Bearish Crossover'
+    ))
+    
+    fig.update_layout(
+        title=title,
+        xaxis_title='Date/Time',
+        yaxis_title='Price',
+        template='plotly_dark',
+        height=600
+    )
+    
+    fig.show()
+
+
+def get_accurate_signals(line_break_df, max_signals=7):
+    """
+    Accurate signals extract karein
+    """
     signals = []
-    if df is not None and not df.empty:
-        temp_df = df.dropna(subset=['EMA_Fast', 'EMA_Slow', 'Signal'])
-        # Filter only valid crossovers
-        signal_rows = temp_df[temp_df['Signal'].isin([2, -2])].tail(max_signals)
+    
+    # Sirf crossover points
+    crossovers = line_break_df[line_break_df['Crossover'] != 0]
+    
+    for idx, row in crossovers.iterrows():
+        if row['Crossover'] == 1:
+            sig_type = "Bullish Crossover 🟢"
+        else:
+            sig_type = "Bearish Crossover 🔴"
         
-        for index, row in signal_rows.iterrows():
-            sig_type = "Bullish Crossover 🟢" if row['Signal'] == 2 else "Bearish Crossover 🔴"
-            close_col = 'Close' if 'Close' in row else 'close' if 'close' in row else df.columns[0]
-            try: 
-                formatted_time = pd.to_datetime(index).strftime('%Y-%m-%d %H:%M')
-            except: 
-                formatted_time = str(index)
-                
-            signals.append({
-                "rule_no": "EMA Crossover",
-                "signal": sig_type,
-                "close": row[close_col],
-                "time": formatted_time
-            })
-    return signals[::-1]
+        signals.append({
+            "signal": sig_type,
+            "close": row['Close'],
+            "time": str(idx),
+            "fast_ema": row['EMA_Fast'],
+            "slow_ema": row['EMA_Slow']
+        })
+    
+    return signals[-max_signals:][::-1]  # Latest signals first
+
+
+# ========== COMPLETE USAGE EXAMPLE ==========
+
+# Step 1: Load original data
+df = pd.read_csv('your_data.csv', index_col='Date', parse_dates=True)
+# Ensure columns: ['Open', 'High', 'Low', 'Close']
+
+# Step 2: Convert to 3-line break
+line_break_df = convert_to_3_line_break(df)  # Your existing function
+
+# Step 3: Line Break chart pe EMAs plot karein
+result_df = create_line_break_with_emas(df, line_break_df, fast_ema=21, slow_ema=44)
+
+# Step 4: Visualize
+visualize_line_break_with_emas(result_df)
+
+# Step 5: Extract signals
+signals = get_accurate_signals(result_df, max_signals=7)
+
+# Print signals with details
+print("\n=== LATEST SIGNALS ===")
+for sig in signals:
+    print(f"Time: {sig['time']}")
+    print(f"Signal: {sig['signal']}")
+    print(f"Price: {sig['close']:.2f}")
+    print(f"Fast EMA: {sig['fast_ema']:.2f}, Slow EMA: {sig['slow_ema']:.2f}")
+    print("-" * 40)
+
+
+# ========== ALTERNATIVE METHOD: Resample to Regular Intervals ==========
+
+def create_resampled_line_break_with_emas(df, interval='1min'):
+    """
+    Regular interval pe line break + EMAs
+    """
+    # Pehle line break banayein
+    line_break_df = convert_to_3_line_break(df)
+    
+    # Regular interval pe resample karein
+    resampled_lb = line_break_df.resample(interval).agg({
+        'Open': 'first',
+        'High': 'max',
+        'Low': 'min',
+        'Close': 'last'
+    }).dropna()
+    
+    # Ab EMAs calculate karein is regular data pe
+    resampled_lb['EMA_Fast'] = resampled_lb['Close'].ewm(span=21, adjust=False).mean()
+    resampled_lb['EMA_Slow'] = resampled_lb['Close'].ewm(span=44, adjust=False).mean()
+    
+    # Crossover signals
+    resampled_lb['Crossover'] = 0
+    for i in range(1, len(resampled_lb)):
+        if (resampled_lb.iloc[i-1]['EMA_Fast'] <= resampled_lb.iloc[i-1]['EMA_Slow'] and 
+            resampled_lb.iloc[i]['EMA_Fast'] > resampled_lb.iloc[i]['EMA_Slow']):
+            resampled_lb.iloc[i, resampled_lb.columns.get_loc('Crossover')] = 1
+        elif (resampled_lb.iloc[i-1]['EMA_Fast'] >= resampled_lb.iloc[i-1]['EMA_Slow'] and 
+              resampled_lb.iloc[i]['EMA_Fast'] < resampled_lb.iloc[i]['EMA_Slow']):
+            resampled_lb.iloc[i, resampled_lb.columns.get_loc('Crossover')] = -1
+    
+    return resampled_lb
