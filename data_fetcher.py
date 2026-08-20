@@ -4,7 +4,7 @@ import pandas as pd
 from datetime import datetime
 
 # 🔴 YAHAN APNI GITHUB API KA DEPLOYED LINK DAALEIN
-API_BASE_URL = "https://your-deployed-api-url.com" 
+API_BASE_URL = "https://indian-stock-market-api.pages.dev"
 
 def fetch_script_data(symbol, interval="1d", period="365d"):
     # 1. Historical Data (yfinance)
