@@ -70,16 +70,44 @@ def calculate_indicators(df, fast_ema=21, slow_ema=44):
     if df is not None and not df.empty:
         target_col = 'Close' if 'Close' in df.columns else 'close' if 'close' in df.columns else df.columns[0]
         df[target_col] = pd.to_numeric(df[target_col], errors='coerce')
+        
+        # EMA Calculation
         df['EMA_Fast'] = ta.ema(df[target_col], length=fast_ema)
         df['EMA_Slow'] = ta.ema(df[target_col], length=slow_ema)
+        
+        # 🔴 REPAINTING FIX: Pichli 2 closed candles ka data nikalna
+        df['EMA_Fast_t1'] = df['EMA_Fast'].shift(1)
+        df['EMA_Slow_t1'] = df['EMA_Slow'].shift(1)
+        
+        df['EMA_Fast_t2'] = df['EMA_Fast'].shift(2)
+        df['EMA_Slow_t2'] = df['EMA_Slow'].shift(2)
+        
+        # Default Signal aur Trend
+        df['Signal'] = 0
         df['Trend'] = np.where(df['EMA_Fast'] > df['EMA_Slow'], 1, -1)
-        df['Signal'] = df['Trend'].diff()
+        
+        # 🟢 EXACT CROSSOVER LOGIC (On Closed Candles Only)
+        # Bullish: Pichli se pichli me Fast niche/barabar tha, aur latest closed me upar aa gaya
+        bullish_cond = (df['EMA_Fast_t2'] <= df['EMA_Slow_t2']) & (df['EMA_Fast_t1'] > df['EMA_Slow_t1'])
+        
+        # 🔴 EXACT CROSSOVER LOGIC (On Closed Candles Only)
+        # Bearish: Pichli se pichli me Fast upar/barabar tha, aur latest closed me niche aa gaya
+        bearish_cond = (df['EMA_Fast_t2'] >= df['EMA_Slow_t2']) & (df['EMA_Fast_t1'] < df['EMA_Slow_t1'])
+        
+        # Compatible numbering (2 for Bullish, -2 for Bearish)
+        df.loc[bullish_cond, 'Signal'] = 2
+        df.loc[bearish_cond, 'Signal'] = -2
+        
+        # Extra columns drop karna taaki system halka rahe
+        df.drop(columns=['EMA_Fast_t1', 'EMA_Slow_t1', 'EMA_Fast_t2', 'EMA_Slow_t2'], inplace=True, errors='ignore')
+        
     return df
 
 def check_rules(df, max_signals=7):
     signals = []
     if df is not None and not df.empty:
         temp_df = df.dropna(subset=['EMA_Fast', 'EMA_Slow', 'Signal'])
+        # Signal 2 (Bullish) aur -2 (Bearish) check kar raha hai
         signal_rows = temp_df[temp_df['Signal'].isin([2, -2])].tail(max_signals)
         
         for index, row in signal_rows.iterrows():
