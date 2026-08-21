@@ -35,12 +35,19 @@ def send_telegram_alert(script_name, timeframe, signal_type, price, time_str):
         requests.post(f"https://api.telegram.org/bot{bot_token}/sendMessage", data={"chat_id": chat_id, "text": message, "parse_mode": "Markdown"})
     except: pass
 
-st.title("⚡ Hybrid Scanner (Fyers True Data)")
-st.markdown("**(Live API + Institutional 100% Accurate Data)**")
+st.title("⚡ 3-Line Break Quant Scanner")
+st.markdown("**(Fyers True Data + API Limit Safe)**")
 
+# Aap yahan apne 100+ stocks easily add kar sakte hain
 WATCHLIST = {
-    "RELIANCE": "RELIANCE.NS", "TCS": "TCS.NS", "HDFCBANK": "HDFCBANK.NS", 
-    "INFY": "INFY.NS", "ICICIBANK": "ICICIBANK.NS", "SBIN": "SBIN.NS"
+    "RELIANCE": "RELIANCE.NS", 
+    "TCS": "TCS.NS", 
+    "HDFCBANK": "HDFCBANK.NS", 
+    "INFY": "INFY.NS", 
+    "ICICIBANK": "ICICIBANK.NS", 
+    "SBIN": "SBIN.NS",
+    "ITC": "ITC.NS",
+    "BHARTIARTL": "BHARTIARTL.NS"
 }
 
 # --- FYERS LOGIN SIDEBAR ---
@@ -75,7 +82,7 @@ st.sidebar.header("⚙️ Controls")
 selected_timeframes = st.sidebar.multiselect("Timeframes:", ["15m", "1h", "1d"], default=["1h", "1d"])
 enable_telegram = st.sidebar.checkbox("📲 Telegram Alerts", value=False)
 
-if st.sidebar.button("🚀 Run Scan", use_container_width=True):
+if st.sidebar.button("🚀 Run Mass Scan", use_container_width=True):
     if not data_fetcher.is_authenticated():
         st.warning("⚠️ Please connect to Fyers from the sidebar first!")
         st.stop()
