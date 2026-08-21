@@ -29,14 +29,18 @@ def generate_and_save_token(auth_code):
         response_type="code",
         grant_type="authorization_code"
     )
-    session.set_token(auth_code)
+    # White space hatane ke liye strip() lagaya hai
+    session.set_token(auth_code.strip()) 
     response = session.generate_token()
     
     if "access_token" in response:
         with open(TOKEN_FILE, 'w') as f:
             f.write(response['access_token'])
-        return True
-    return False
+        return True, "Connected!"
+    else:
+        # Fyers ka exact error message bhejega
+        error_msg = response.get("message", str(response))
+        return False, f"API Error: {error_msg}"
 
 def is_authenticated():
     """Check karta hai ki token file exist karti hai ya nahi."""
@@ -45,7 +49,7 @@ def is_authenticated():
 def fetch_script_data(symbol, interval, period='max'):
     """Fyers API se data fetch karta hai."""
     if not is_authenticated():
-        return None # Streamlit ko rukne nahi dega, bas data None bhej dega
+        return None 
         
     try:
         with open(TOKEN_FILE, 'r') as f:
