@@ -52,11 +52,15 @@ if not data_fetcher.is_authenticated():
     
     auth_code = st.sidebar.text_input("Paste 'auth_code' here:")
     if st.sidebar.button("Connect API"):
-        if auth_code and data_fetcher.generate_and_save_token(auth_code):
-            st.sidebar.success("Connected!")
-            st.rerun()
+        if auth_code:
+            success, msg = data_fetcher.generate_and_save_token(auth_code)
+            if success:
+                st.sidebar.success("✅ Connected!")
+                st.rerun()
+            else:
+                st.sidebar.error(msg) 
         else:
-            st.sidebar.error("Invalid Code or Empty")
+            st.sidebar.error("Code is empty!")
 else:
     st.sidebar.success("✅ Fyers Connected")
     if st.sidebar.button("Logout / Reset Token"):
