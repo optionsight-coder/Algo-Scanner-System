@@ -3,9 +3,6 @@ import pandas_ta as ta
 import numpy as np
 
 def convert_to_3_line_break(df, num_lines=3):
-    """
-    TradingView exact 3-line break blocks calculator.
-    """
     if df is None or df.empty: return df
     
     close_col = 'Close' if 'Close' in df.columns else 'close' if 'close' in df.columns else None
@@ -55,9 +52,6 @@ def convert_to_3_line_break(df, num_lines=3):
     return lb_df
 
 def calculate_indicators(df, fast_ema=21, slow_ema=44):
-    """
-    3-Line Break blocks par exact EMA Crossover.
-    """
     if df is None or df.empty: return df
         
     df['Close'] = pd.to_numeric(df['Close'], errors='coerce')
@@ -81,7 +75,7 @@ def calculate_indicators(df, fast_ema=21, slow_ema=44):
     
     return df
 
-def check_rules(df, max_signals=7):
+def check_rules(df, max_signals=6):
     signals = []
     if df is None or df.empty: return signals
         
