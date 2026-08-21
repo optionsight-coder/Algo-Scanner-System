@@ -5,7 +5,7 @@ from fyers_apiv3 import fyersModel
 
 # Aapke Fyers API Credentials
 APP_ID = "ZF5ZUHTUQN-100"
-SECRET_KEY = "MYQSBOIJDA"
+SECRET_KEY = "JG9KVFX9ST"
 REDIRECT_URI = "https://127.0.0.1"
 TOKEN_FILE = "fyers_token.txt"
 
