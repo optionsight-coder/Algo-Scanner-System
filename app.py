@@ -93,7 +93,8 @@ else:
 
 st.sidebar.markdown("---")
 st.sidebar.markdown("### ⚙️ Scan Parameters")
-selected_timeframes = st.sidebar.multiselect("Select Timeframes:", ["15m", "1h", "1d"], default=["1h", "1d"])
+# 3h TIMEFRAME ADDED HERE
+selected_timeframes = st.sidebar.multiselect("Select Timeframes:", ["15m", "1h", "3h", "1d"], default=["1h", "3h", "1d"])
 enable_telegram = st.sidebar.checkbox("📲 Enable Telegram Alerts", value=False)
 
 st.sidebar.markdown("<br>", unsafe_allow_html=True)
@@ -194,7 +195,6 @@ if start_scan:
                 with col1:
                     st.markdown("<h4 style='color: #089981; margin-bottom: 10px;'>🟢 Bullish Crossovers (Buy Alerts)</h4>", unsafe_allow_html=True)
                     if not bull_df.empty:
-                        # ERROR FIXED: .map() used instead of .applymap()
                         styled_bull = bull_df.style.map(color_signal, subset=['Signal', 'Status'])
                         st.dataframe(
                             styled_bull,
@@ -215,7 +215,6 @@ if start_scan:
                 with col2:
                     st.markdown("<h4 style='color: #F23645; margin-bottom: 10px;'>🔴 Bearish Crossovers (Sell Alerts)</h4>", unsafe_allow_html=True)
                     if not bear_df.empty:
-                        # ERROR FIXED: .map() used instead of .applymap()
                         styled_bear = bear_df.style.map(color_signal, subset=['Signal', 'Status'])
                         st.dataframe(
                             styled_bear,
