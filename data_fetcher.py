@@ -28,9 +28,6 @@ def is_authenticated():
     return os.path.exists(TOKEN_FILE)
 
 def fetch_script_data(symbol, interval):
-    """
-    100+ Stocks ke liye Optimized Pagination Logic.
-    """
     if not is_authenticated(): return None 
         
     try:
@@ -43,7 +40,6 @@ def fetch_script_data(symbol, interval):
         tf_map = {'15m': '15', '1h': '60', '3h': '180', '1d': 'D'}
         res = tf_map.get(interval, 'D')
         
-        # SMART DATA SIZING FOR 100+ STOCKS
         if interval in ['15m', '1h', '3h']:
             chunk_days = 99
             total_days_needed = 99 
@@ -72,7 +68,6 @@ def fetch_script_data(symbol, interval):
             if response.get('s') == 'ok' and response.get('candles'):
                 all_data.extend(response['candles'])
                 
-            # MAGICAL SPEED BREAKER (0.33 sec pause to prevent API ban on 100 stocks)
             time.sleep(0.33) 
             
             current_end = current_start - datetime.timedelta(days=1)
