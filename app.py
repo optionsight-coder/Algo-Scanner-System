@@ -11,7 +11,6 @@ from strategy import convert_to_3_line_break, calculate_indicators, check_rules
 
 warnings.filterwarnings('ignore')
 
-# 1. PROFESSIONAL PAGE CONFIG
 st.set_page_config(
     page_title="Pro Quant Scanner", 
     page_icon="⚡", 
@@ -19,7 +18,6 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# 2. CUSTOM CSS FOR INSTITUTIONAL LOOK
 st.markdown("""
     <style>
     .stApp { background-color: #0E1117; }
@@ -65,14 +63,12 @@ st.markdown("<h1 style='text-align: center; color: #FFFFFF; margin-bottom: 0px;'
 st.markdown("<p style='text-align: center; color: #8A93A6; font-size: 16px;'>Algorithmic 3-Line Break Detection Engine</p>", unsafe_allow_html=True)
 st.markdown("---")
 
-# Aap yahan apne 100+ stocks easily add kar sakte hain
 WATCHLIST = {
     "RELIANCE": "RELIANCE.NS", "TCS": "TCS.NS", "HDFCBANK": "HDFCBANK.NS", 
     "INFY": "INFY.NS", "ICICIBANK": "ICICIBANK.NS", "SBIN": "SBIN.NS",
     "ITC": "ITC.NS", "BHARTIARTL": "BHARTIARTL.NS"
 }
 
-# --- SIDEBAR ---
 st.sidebar.markdown("### 🔑 API Auth (Fyers)")
 if not data_fetcher.is_authenticated():
     st.sidebar.error("🔴 Disconnected")
@@ -103,7 +99,6 @@ enable_telegram = st.sidebar.checkbox("📲 Enable Telegram Alerts", value=False
 st.sidebar.markdown("<br>", unsafe_allow_html=True)
 start_scan = st.sidebar.button("🚀 INITIATE SCAN", use_container_width=True, type="primary")
 
-# --- MAIN LOGIC ---
 if start_scan:
     if not data_fetcher.is_authenticated():
         st.error("⚠️ System Offline: Please connect Fyers API from the sidebar.")
@@ -127,8 +122,6 @@ if start_scan:
                 three_line_df = convert_to_3_line_break(raw_df)
                 if three_line_df is not None:
                     processed_df = calculate_indicators(three_line_df, fast_ema=21, slow_ema=44)
-                    
-                    # CHANGE 1: Ab yahan 6 signals laayega
                     signal_list = check_rules(processed_df, max_signals=6)
                     
                     if signal_list:
@@ -159,7 +152,6 @@ if start_scan:
     progress_bar.empty()
     status_text.empty()
     
-    # --- RENDER KPI CARDS ---
     st.markdown(f"""
         <div class="kpi-container">
             <div class="kpi-card">
@@ -177,7 +169,6 @@ if start_scan:
         </div>
     """, unsafe_allow_html=True)
     
-    # --- RENDER SPLIT RESULTS TABLE ---
     if alert_results:
         result_df = pd.DataFrame(alert_results)
         result_df = result_df.sort_values(by="Time", ascending=False)
@@ -195,18 +186,16 @@ if start_scan:
             with tabs[i]:
                 tf_df = result_df[result_df['Timeframe'] == tf].drop(columns=['Timeframe']).reset_index(drop=True)
                 
-                # CHANGE 2: Bullish aur Bearish ka data alag kar diya
                 bull_df = tf_df[tf_df['Signal'].str.contains('Bullish', case=False, na=False)].reset_index(drop=True)
                 bear_df = tf_df[tf_df['Signal'].str.contains('Bearish', case=False, na=False)].reset_index(drop=True)
                 
-                # Screen ko 2 hisso me divide kar diya
                 col1, col2 = st.columns(2)
                 
-                # LEFT SIDE - BULLISH
                 with col1:
                     st.markdown("<h4 style='color: #089981; margin-bottom: 10px;'>🟢 Bullish Crossovers (Buy Alerts)</h4>", unsafe_allow_html=True)
                     if not bull_df.empty:
-                        styled_bull = bull_df.style.applymap(color_signal, subset=['Signal', 'Status'])
+                        # ERROR FIXED: .map() used instead of .applymap()
+                        styled_bull = bull_df.style.map(color_signal, subset=['Signal', 'Status'])
                         st.dataframe(
                             styled_bull,
                             use_container_width=True,
@@ -223,11 +212,11 @@ if start_scan:
                     else:
                         st.info("No Bullish signals found in this timeframe.")
                 
-                # RIGHT SIDE - BEARISH
                 with col2:
                     st.markdown("<h4 style='color: #F23645; margin-bottom: 10px;'>🔴 Bearish Crossovers (Sell Alerts)</h4>", unsafe_allow_html=True)
                     if not bear_df.empty:
-                        styled_bear = bear_df.style.applymap(color_signal, subset=['Signal', 'Status'])
+                        # ERROR FIXED: .map() used instead of .applymap()
+                        styled_bear = bear_df.style.map(color_signal, subset=['Signal', 'Status'])
                         st.dataframe(
                             styled_bear,
                             use_container_width=True,
