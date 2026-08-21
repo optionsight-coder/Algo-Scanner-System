@@ -1,54 +1,92 @@
-import yfinance as yf
-import requests
 import pandas as pd
-from datetime import datetime
+import datetime
+import os
+from fyers_apiv3 import fyersModel
 
-# 🔴 AAPKI LIVE CLOUDFLARE API KA LINK
-API_BASE_URL = "https://indian-stock-market-api.option-sight.workers.dev"
+# Aapke Fyers API Credentials
+APP_ID = "ZF5ZUHTUQN-100"
+SECRET_KEY = "MYQSBOIJDA"
+REDIRECT_URI = "https://127.0.0.1"
+TOKEN_FILE = "fyers_token.txt"
 
-def fetch_script_data(symbol, interval="1d", period="365d"):
-    """
-    Hybrid Fetcher: Historical data from yfinance + Live Tick from Cloudflare API.
-    """
-    # 1. Historical Data (yfinance se laana)
-    df = yf.download(symbol, period=period, interval=interval, progress=False)
+def get_fyers_login_link():
+    """Streamlit me dikhane ke liye Login Link generate karta hai."""
+    session = fyersModel.SessionModel(
+        client_id=APP_ID,
+        secret_key=SECRET_KEY,
+        redirect_uri=REDIRECT_URI,
+        response_type="code",
+        grant_type="authorization_code"
+    )
+    return session.generate_authcode()
+
+def generate_and_save_token(auth_code):
+    """User ke diye auth_code se Access Token banakar save karta hai."""
+    session = fyersModel.SessionModel(
+        client_id=APP_ID,
+        secret_key=SECRET_KEY,
+        redirect_uri=REDIRECT_URI,
+        response_type="code",
+        grant_type="authorization_code"
+    )
+    session.set_token(auth_code)
+    response = session.generate_token()
     
-    if df is None or df.empty:
-        return None
+    if "access_token" in response:
+        with open(TOKEN_FILE, 'w') as f:
+            f.write(response['access_token'])
+        return True
+    return False
+
+def is_authenticated():
+    """Check karta hai ki token file exist karti hai ya nahi."""
+    return os.path.exists(TOKEN_FILE)
+
+def fetch_script_data(symbol, interval, period='max'):
+    """Fyers API se data fetch karta hai."""
+    if not is_authenticated():
+        return None # Streamlit ko rukne nahi dega, bas data None bhej dega
         
-    # MultiIndex column fix (yfinance ke naye update ke liye)
-    if isinstance(df.columns, pd.MultiIndex):
-        df.columns = df.columns.get_level_values(0)
-
-    # 2. Live Data Stitching (Aapki Cloudflare API se live tick laana)
-    clean_symbol = symbol.replace(".NS", "") 
-    api_url = f"{API_BASE_URL}/stock?symbol={clean_symbol}&res=num"
-    
     try:
-        response = requests.get(api_url, timeout=3)
-        if response.status_code == 200:
-            api_response = response.json()
+        with open(TOKEN_FILE, 'r') as f:
+            access_token = f.read().strip()
             
-            # 🔴 JSON se sahi data nikalna (Screenshot ke mutabiq)
-            if api_response.get("status") == "success":
-                live_price = api_response.get("data", {}).get("last_price")
-                
-                if live_price:
-                    current_time = pd.to_datetime(datetime.now())
-                    
-                    # Live tick ko 'Aaj ki aakhri Candle' bana kar DataFrame me jodna
-                    new_row = pd.DataFrame({
-                        'Open': [live_price],
-                        'High': [live_price],
-                        'Low': [live_price],
-                        'Close': [live_price],
-                        'Volume': [0]
-                    }, index=[current_time])
-                    
-                    df = pd.concat([df, new_row])
-                    print(f"✅ {symbol}: Live Price (₹{live_price}) lag gaya!")
-    except Exception as e:
-        # Agar API ka server down ho, toh code crash nahi hoga, sirf yfinance data se chalega
-        print(f"⚠️ Live API error for {symbol}, using yfinance data only: {e}")
+        fyers = fyersModel.FyersModel(client_id=APP_ID, is_async=False, token=access_token, log_path="")
         
-    return df
+        # Symbol Formatting
+        if symbol.endswith('.NS'):
+            fyers_sym = f"NSE:{symbol.replace('.NS', '')}-EQ"
+        else:
+            fyers_sym = symbol
+            
+        tf_map = {'15m': '15', '1h': '60', '3h': '180', '1d': 'D'}
+        res = tf_map.get(interval, 'D')
+        
+        to_date = datetime.date.today()
+        if interval in ['15m', '1h', '3h']:
+            from_date = to_date - datetime.timedelta(days=99) 
+        else:
+            from_date = to_date - datetime.timedelta(days=700) 
+            
+        data = {
+            "symbol": fyers_sym,
+            "resolution": res,
+            "date_format": "1",
+            "range_from": from_date.strftime('%Y-%m-%d'),
+            "range_to": to_date.strftime('%Y-%m-%d'),
+            "cont_flag": "1"
+        }
+        
+        response = fyers.history(data=data)
+        
+        if response.get('s') == 'ok':
+            df = pd.DataFrame(response['candles'], columns=['datetime', 'Open', 'High', 'Low', 'Close', 'Volume'])
+            df['datetime'] = pd.to_datetime(df['datetime'], unit='s')
+            df['datetime'] = df['datetime'].dt.tz_localize('UTC').dt.tz_convert('Asia/Kolkata').dt.tz_localize(None)
+            df.set_index('datetime', inplace=True)
+            return df
+        else:
+            return None
+            
+    except Exception as e:
+        return None
