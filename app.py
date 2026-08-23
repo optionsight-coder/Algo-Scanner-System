@@ -76,7 +76,7 @@ WATCHLIST = {
     "Nestle India": "NESTLEIND.NS",
     "Tata Consumer": "TATACONSUM.NS",
     "ONGC": "ONGC.NS",
-    "Coal India": "COALINDIA.NS"
+    "Coal India": "COALINDIA.NS",
     
     "RELIANCE": "RELIANCE.NS", 
     "TCS": "TCS.NS", 
