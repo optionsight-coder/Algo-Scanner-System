@@ -64,9 +64,28 @@ st.markdown("<p style='text-align: center; color: #8A93A6; font-size: 16px;'>Alg
 st.markdown("---")
 
 WATCHLIST = {
-    "RELIANCE": "RELIANCE.NS", "TCS": "TCS.NS", "HDFCBANK": "HDFCBANK.NS", 
-    "INFY": "INFY.NS", "ICICIBANK": "ICICIBANK.NS", "SBIN": "SBIN.NS",
-    "ITC": "ITC.NS", "BHARTIARTL": "BHARTIARTL.NS"
+
+    "Sun Pharma": "SUNPHARMA.NS",
+    "Divis Labs": "DIVISLAB.NS",
+    "Cipla": "CIPLA.NS",
+    "Torrent Pharma": "TORNTPHARM.NS",
+    "Laurus Labs": "LAURUSLABS.NS",
+    "Dr. Reddys": "DRREDDY.NS",   
+    
+    "HUL": "HINDUNILVR.NS",
+    "Nestle India": "NESTLEIND.NS",
+    "Tata Consumer": "TATACONSUM.NS",
+    "ONGC": "ONGC.NS",
+    "Coal India": "COALINDIA.NS"
+    
+    "RELIANCE": "RELIANCE.NS", 
+    "TCS": "TCS.NS", 
+    "HDFCBANK": "HDFCBANK.NS", 
+    "INFY": "INFY.NS", 
+    "ICICIBANK": "ICICIBANK.NS", 
+    "SBIN": "SBIN.NS",
+    "ITC": "ITC.NS", 
+    "BHARTIARTL": "BHARTIARTL.NS"
 }
 
 st.sidebar.markdown("### 🔑 API Auth (Fyers)")
