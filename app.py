@@ -76,6 +76,12 @@ def get_dynamic_crude():
     return f"MCX:CRUDEOIL{year}{month}FUT"
 
 WATCHLIST = {
+    "Nifty 50": "NSE:NIFTY50-INDEX",
+    "Bank Nifty": "NSE:NIFTYBANK-INDEX",
+    "FinNifty": "NSE:FINNIFTY-INDEX",
+    "Midcap Nifty": "NSE:MIDCPNIFTY-INDEX",
+    "Sensex": "BSE:SENSEX-INDEX", 
+    
     "Sun Pharma": "SUNPHARMA.NS",
     "Divis Labs": "DIVISLAB.NS",
     "Cipla": "CIPLA.NS",
