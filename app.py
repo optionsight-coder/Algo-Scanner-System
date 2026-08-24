@@ -4,7 +4,7 @@ import warnings
 import requests
 import json
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import data_fetcher
 from strategy import convert_to_3_line_break, calculate_indicators, check_rules
@@ -63,8 +63,19 @@ st.markdown("<h1 style='text-align: center; color: #FFFFFF; margin-bottom: 0px;'
 st.markdown("<p style='text-align: center; color: #8A93A6; font-size: 16px;'>Algorithmic 3-Line Break Detection Engine</p>", unsafe_allow_html=True)
 st.markdown("---")
 
-WATCHLIST = {
+# Auto-Rollover Logic for Crude Oil
+def get_dynamic_crude():
+    today = datetime.now()
+    if today.day >= 16:
+        target = today + timedelta(days=20)
+    else:
+        target = today
+        
+    year = target.strftime("%y")
+    month = target.strftime("%b").upper()
+    return f"MCX:CRUDEOIL{year}{month}FUT"
 
+WATCHLIST = {
     "Sun Pharma": "SUNPHARMA.NS",
     "Divis Labs": "DIVISLAB.NS",
     "Cipla": "CIPLA.NS",
@@ -85,7 +96,9 @@ WATCHLIST = {
     "ICICIBANK": "ICICIBANK.NS", 
     "SBIN": "SBIN.NS",
     "ITC": "ITC.NS", 
-    "BHARTIARTL": "BHARTIARTL.NS"
+    "BHARTIARTL": "BHARTIARTL.NS",
+    
+    "Crude Oil": get_dynamic_crude()
 }
 
 st.sidebar.markdown("### 🔑 API Auth (Fyers)")
@@ -112,7 +125,6 @@ else:
 
 st.sidebar.markdown("---")
 st.sidebar.markdown("### ⚙️ Scan Parameters")
-# 3h TIMEFRAME ADDED HERE
 selected_timeframes = st.sidebar.multiselect("Select Timeframes:", ["15m", "1h", "3h", "1d"], default=["1h", "3h", "1d"])
 enable_telegram = st.sidebar.checkbox("📲 Enable Telegram Alerts", value=False)
 
