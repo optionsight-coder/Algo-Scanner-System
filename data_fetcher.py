@@ -5,7 +5,7 @@ import os
 from fyers_apiv3 import fyersModel
 
 APP_ID = "ZF5ZUHTUQN-100"
-SECRET_KEY = "BAC5E3EI8X"
+SECRET_KEY = "5ILXTC1ZC3"
 REDIRECT_URI = "https://127.0.0.1"
 TOKEN_FILE = "fyers_token.txt"
 
