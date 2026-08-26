@@ -4,24 +4,34 @@ import numpy as np
 def convert_to_3_line_break(df):
     """
     Converts standard OHLCV dataframe to 3-Line Break blocks.
+    Handles columns or index timestamps automatically.
     """
     if df is None or len(df) == 0:
         return None
         
-    # 🌟 NEW FIX: Automatically lowercase columns and rename 'date' or 'datetime' to 'time'
-    df.columns = df.columns.str.lower()
-    if 'time' not in df.columns:
-        if 'date' in df.columns:
-            df = df.rename(columns={'date': 'time'})
-        elif 'datetime' in df.columns:
-            df = df.rename(columns={'datetime': 'time'})
-        elif 'timestamp' in df.columns:
-            df = df.rename(columns={'timestamp': 'time'})
+    df = df.copy()
+    
+    # Agar time/date column me nahi hai balki index me hai, toh use column bana lo
+    if not any(col in [c.lower() for c in df.columns] for col in ['time', 'date', 'datetime', 'timestamp']):
+        df = df.reset_index()
+        
+    # Saare column names ko lowercase kar lo
+    df.columns = [str(c).lower() for c in df.columns]
+    
+    # Sahi time column ko dhoondho
+    time_col = None
+    for col in ['time', 'date', 'datetime', 'timestamp', 'index']:
+        if col in df.columns:
+            time_col = col
+            break
+            
+    if time_col is None:
+        time_col = df.columns[0] # Fallback to first column
             
     blocks = []
     # Initialize with the first candle
     blocks.append({
-        'time': df.iloc[0]['time'],
+        'time': df.iloc[0][time_col],
         'open': df.iloc[0]['open'],
         'high': df.iloc[0]['high'],
         'low': df.iloc[0]['low'],
@@ -31,37 +41,29 @@ def convert_to_3_line_break(df):
     
     for i in range(1, len(df)):
         curr_price = df.iloc[i]['close']
-        curr_time = df.iloc[i]['time']
+        curr_time = df.iloc[i][time_col]
         
         last_block = blocks[-1]
-        
-        # Determine current trend blocks
         trend = last_block['trend']
         
         if trend == 1: # Current trend is Up
             if curr_price > last_block['close']:
-                # Continue Up
                 blocks.append({'time': curr_time, 'open': last_block['close'], 'high': curr_price, 'low': last_block['close'], 'close': curr_price, 'trend': 1})
             else:
-                # Check for reversal (needs to break lowest low of last 3 UP blocks)
                 up_blocks = [b for b in blocks if b['trend'] == 1][-3:]
                 if len(up_blocks) == 3:
                     reversal_price = min([b['open'] for b in up_blocks])
                     if curr_price < reversal_price:
-                        # Reversal Down
                         blocks.append({'time': curr_time, 'open': last_block['close'], 'high': last_block['close'], 'low': curr_price, 'close': curr_price, 'trend': -1})
         
         elif trend == -1: # Current trend is Down
             if curr_price < last_block['close']:
-                # Continue Down
                 blocks.append({'time': curr_time, 'open': last_block['close'], 'high': last_block['close'], 'low': curr_price, 'close': curr_price, 'trend': -1})
             else:
-                # Check for reversal (needs to break highest high of last 3 DOWN blocks)
                 down_blocks = [b for b in blocks if b['trend'] == -1][-3:]
                 if len(down_blocks) == 3:
                     reversal_price = max([b['open'] for b in down_blocks])
                     if curr_price > reversal_price:
-                        # Reversal Up
                         blocks.append({'time': curr_time, 'open': last_block['close'], 'high': curr_price, 'low': last_block['close'], 'close': curr_price, 'trend': 1})
                         
     return pd.DataFrame(blocks)
