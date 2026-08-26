@@ -76,12 +76,14 @@ def get_dynamic_crude():
     return f"MCX:CRUDEOIL{year}{month}FUT"
 
 WATCHLIST = {
+    # --- MAJOR INDICES ---
     "Nifty 50": "NSE:NIFTY50-INDEX",
     "Bank Nifty": "NSE:NIFTYBANK-INDEX",
     "FinNifty": "NSE:FINNIFTY-INDEX",
     "Midcap Nifty": "NSE:MIDCPNIFTY-INDEX",
-    "Sensex": "BSE:SENSEX-INDEX", 
+    "Sensex": "BSE:SENSEX-INDEX",
     
+    # --- PHARMA ---
     "Sun Pharma": "SUNPHARMA.NS",
     "Divis Labs": "DIVISLAB.NS",
     "Cipla": "CIPLA.NS",
@@ -89,12 +91,14 @@ WATCHLIST = {
     "Laurus Labs": "LAURUSLABS.NS",
     "Dr. Reddys": "DRREDDY.NS",   
     
+    # --- FMCG ---
     "HUL": "HINDUNILVR.NS",
     "Nestle India": "NESTLEIND.NS",
     "Tata Consumer": "TATACONSUM.NS",
+    
+    # --- ENERGY & OTHERS ---
     "ONGC": "ONGC.NS",
     "Coal India": "COALINDIA.NS",
-    
     "RELIANCE": "RELIANCE.NS", 
     "TCS": "TCS.NS", 
     "HDFCBANK": "HDFCBANK.NS", 
@@ -104,6 +108,7 @@ WATCHLIST = {
     "ITC": "ITC.NS", 
     "BHARTIARTL": "BHARTIARTL.NS",
     
+    # --- COMMODITIES ---
     "Crude Oil": get_dynamic_crude()
 }
 
@@ -241,7 +246,7 @@ if start_scan:
                             column_config={
                                 "Script": st.column_config.TextColumn("📌 Symbol", width="small"),
                                 "Status": st.column_config.TextColumn("Status", width="small"),
-                                "Signal": st.column_config.TextColumn("🎯 Action", width="medium"),
+                                "Signal": st.column_config.TextColumn("🎯 Action", width="large"),
                                 "Price": st.column_config.NumberColumn("💵 Trigger Price", format="₹ %.2f"),
                                 "Time": st.column_config.DatetimeColumn("🕒 Timestamp", format="DD-MMM-YYYY HH:mm")
                             }
@@ -261,7 +266,7 @@ if start_scan:
                             column_config={
                                 "Script": st.column_config.TextColumn("📌 Symbol", width="small"),
                                 "Status": st.column_config.TextColumn("Status", width="small"),
-                                "Signal": st.column_config.TextColumn("🎯 Action", width="medium"),
+                                "Signal": st.column_config.TextColumn("🎯 Action", width="large"),
                                 "Price": st.column_config.NumberColumn("💵 Trigger Price", format="₹ %.2f"),
                                 "Time": st.column_config.DatetimeColumn("🕒 Timestamp", format="DD-MMM-YYYY HH:mm")
                             }
