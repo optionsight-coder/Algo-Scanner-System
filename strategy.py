@@ -8,16 +8,6 @@ def convert_to_3_line_break(df):
     if df is None or len(df) == 0:
         return None
         
-    # 🌟 NEW FIX: Automatically lowercase columns and rename 'date' or 'datetime' to 'time'
-    df.columns = df.columns.str.lower()
-    if 'time' not in df.columns:
-        if 'date' in df.columns:
-            df = df.rename(columns={'date': 'time'})
-        elif 'datetime' in df.columns:
-            df = df.rename(columns={'datetime': 'time'})
-        elif 'timestamp' in df.columns:
-            df = df.rename(columns={'timestamp': 'time'})
-            
     blocks = []
     # Initialize with the first candle
     blocks.append({
